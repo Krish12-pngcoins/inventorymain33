@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSNumismatics ERP | Enterprise Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+    <style>
+        :root {
+            --fb-blue: #005696;
+            --fb-light: #eef5fb;
+            --fb-sidebar: #2c3e50;
+            --fb-border: #ced4da;
+            --success: #28a745;
+            --danger: #dc3545;
+            --white: #ffffff;
+            --text: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f9; color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }
+
+        /* LAYOUT STRUCTURE */
+        #wrapper { display: flex; height: 100vh; }
+        
+        /* SIDEBAR */
+        #sidebar { width: 220px; background: var(--fb-sidebar); color: white; display: flex; flex-direction: column; z-index: 10; }
+        .brand { padding: 25px 20px; font-weight: bold; font-size: 16px; background: #1a252f; border-bottom: 1px solid #3e4f5f; color: #fff; letter-spacing: 1px; }
+        .nav-item { padding: 15px 20px; cursor: pointer; color: #bdc3c7; border-bottom: 1px solid #3e4f5f; transition: 0.2s; display: flex; align-items: center; gap: 10px; }
+        .nav-item:hover, .nav-item.active { background: var(--fb-blue); color: white; }
+
+        /* MAIN CONTENT AREA */
+        #main { flex: 1; display: flex; flex-direction: column; background: white; position: relative; }
+        .ribbon { height: 55px; border-bottom: 1px solid var(--fb-border); display: flex; align-items: center; padding: 0 20px; gap: 12px; background: #fff; }
+        .page-header { background: var(--fb-light); padding: 12px 25px; border-bottom: 1px solid var(--fb-border); display: flex; justify-content: space-between; align-items: center; }
+        .page-header h2 { font-size: 18px; color: var(--fb-blue); font-weight: 600; }
+        
+        .scanner-indicator { font-weight: bold; font-size: 11px; color: var(--fb-blue); display: flex; align-items: center; gap: 5px; }
+        .dot { height: 8px; width: 8px; background-color: var(--fb-blue); border-radius: 50%; display: inline-block; animation: blink 2s infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        /* CONTENT VIEWS */
+        .view-container { flex: 1; display: flex; overflow: hidden; }
+        .tab-pane { width: 100%; height: 100%; display: none; padding: 20px; overflow-y: auto; }
+        .tab-pane.active { display: block; }
+
+        /* TABLES */
+        .table-wrap { border: 1px solid var(--fb-border); border-radius: 4px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th { text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; color: #666; border-bottom: 2px solid var(--fb-border); background: #f8f9fa; }
+        td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        tr:hover { background: var(--fb-light); }
+
+        /* BATCH/BULK SCANNING SIDEBAR */
+        .bulk-panel { width: 350px; border-left: 1px solid var(--fb-border); background: #fdfdfd; display: flex; flex-direction: column; padding: 20px; }
+        .queue-scroll { flex: 1; overflow-y: auto; margin: 15px 0; }
+        .queue-card { background: white; border: 1px solid var(--fb-blue); border-radius: 4px; padding: 12px; margin-bottom: 10px; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .queue-card input { width: 100%; padding: 6px; border: 1px solid var(--fb-border); border-radius: 3px; margin-top: 8px; font-weight: bold; }
+        .remove-q { position: absolute; top: 10px; right: 10px; color: var(--danger); cursor: pointer; font-weight: bold; }
+
+        /* BUTTONS */
+        .btn { padding: 8px 16px; border: 1px solid var(--fb-border); background: white; cursor: pointer; border-radius: 3px; font-weight: 600; font-size: 12px; transition: 0.2s; }
+        .btn-p { background: var(--fb-blue); color: white; border-color: var(--fb-blue); }
+        .btn-p:hover { background: #004477; }
+        .btn-success { background: var(--success); color: white; border: none; width: 100%; padding: 15px; font-size: 14px; }
+
+        /* INVOICE STYLING */
+        .invoice-paper { max-width: 800px; margin: 0 auto; padding: 50px; background: white; border: 1px solid #eee; box-shadow: 0 0 20px rgba(0,0,0,0.05); color: #000; }
+        .inv-header { display: flex; justify-content: space-between; border-bottom: 3px solid var(--fb-blue); padding-bottom: 20px; margin-bottom: 30px; }
+
+        /* MODALS */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000; }
+        .modal-body { background: white; padding: 30px; border-radius: 6px; width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid var(--fb-border); border-radius: 3px; }
+
+        /* PRINTING OVERRIDES */
+        #label-print-zone { display: none; }
+
+        @media print {
+            body { overflow: visible; height: auto; background: white; }
+            #sidebar, .ribbon, .page-header, .bulk-panel, .no-print, .btn { display: none !important; }
+            #main { margin: 0; padding: 0; border: none; }
+            .tab-pane { display: block !important; padding: 0; }
+            
+            /* Logic to print only the mini barcode label */
+            .printing-label #label-print-zone { 
+                display: block !important; 
+                position: absolute; top: 0; left: 0;
+                width: 2in; height: 1in; text-align: center;
+            }
+            .printing-label #main { display: none !important; }
+            
+            /* Logic for Invoice */
+            .printing-invoice .invoice-paper { border: none; box-shadow: none; width: 100%; margin: 0; padding: 0; }
+        }
+    </style>
+</head>
+<body class="standard-view">
+
+<div id="wrapper">
+    <nav id="sidebar">
+        <div class="brand">KSNumismatics LLC</div>
+        <div class="nav-item active" onclick="switchTab('inventory')">📦 Inventory</div>
+        <div class="nav-item" onclick="switchTab('sales')">✅ Sales History</div>
+        <div class="nav-item" onclick="switchTab('invoice')">🧾 Invoice Maker</div>
+    </nav>
+
+    <main id="main">
+        <div class="ribbon">
+            <button class="btn btn-p" onclick="openModal()">+ Add New Item</button>
+            <div style="flex:1"></div>
+            <div class="scanner-indicator">
+                <span class="dot"></span> GLOBAL SCANNER ACTIVE
+            </div>
+            <input type="text" id="manual-scan" placeholder="Manual Barcode Input..." style="padding:6px; width:180px; border:1px solid var(--fb-border);">
+        </div>
+
+        <div class="page-header">
+            <h2 id="view-title">Inventory Management</h2>
+            <div id="header-stats" style="font-size:12px; color:#666;"></div>
+        </div>
+
+        <div class="view-container">
+            <div id="tab-inventory" class="tab-pane active">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Barcode</th><th>ID</th><th>Item Name</th><th>Year</th><th>Cost</th><th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-list"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-sales" class="tab-pane">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th><th>Item</th><th>Cost</th><th>Sold Price</th><th>Profit</th><th>Buyer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-list"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-invoice" class="tab-pane">
+                <div class="no-print" style="margin-bottom:20px; background:#f8f9fa; padding:15px; border-radius:4px; border:1px solid #ddd;">
+                    <label style="font-weight:bold; margin-right:10px;">Select Sale for Invoice:</label>
+                    <select id="invoice-selector" onchange="buildInvoice()" style="padding:8px; width:300px;"></select>
+                </div>
+                
+                <div class="invoice-paper" id="invoice-target">
+                    <div class="inv-header">
+                        <div>
+                            <h1 style="color:var(--fb-blue); font-size:28px;">INVOICE</h1>
+                            <p><strong>KSNumismatics LLC</strong></p>
+                            <p>Canton, Michigan</p>
+                        </div>
+                        <div style="text-align:right">
+                            <p><strong>Invoice Date:</strong> <span id="inv-date-disp"></span></p>
+                            <p><strong>Invoice #:</strong> <span id="inv-num-disp"></span></p>
+                        </div>
+                    </div>
+                    
+                    <p style="margin-bottom:20px;"><strong>BILL TO:</strong> <br><span id="inv-buyer-disp"></span></p>
+                    
+                    <table>
+                        <thead style="background:var(--fb-blue); color:white;">
+                            <tr><th>Description</th><th style="text-align:right">Total</th></tr>
+                        </thead>
+                        <tbody id="inv-items-list"></tbody>
+                    </table>
+                    
+                    <div style="text-align:right; margin-top:40px;">
+                        <h2 style="color:var(--fb-blue)">Total Due: <span id="inv-total-disp"></span></h2>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:20px;">
+                    <button class="btn btn-p" onclick="triggerPrint('invoice')">🖨️ Print Invoice</button>
+                </div>
+            </div>
+
+            <aside class="bulk-panel">
+                <h3 style="color:var(--fb-blue)">Bulk Scan Queue</h3>
+                <p style="font-size:11px; color:#888;">Items scanned will appear here for batch pricing.</p>
+                
+                <div class="queue-scroll" id="queue-container">
+                    </div>
+
+                <button id="batch-btn" class="btn btn-success" style="display:none;" onclick="processBatch()">CONFIRM BATCH SALE</button>
+            </aside>
+        </div>
+    </main>
+</div>
+
+<div id="label-print-zone">
+    <p style="font-size:10px; font-weight:bold; margin-bottom:2px;">KSNumismatics LLC</p>
+    <svg id="mini-barcode-svg"></svg>
+    <p id="label-item-name" style="font-size:9px;"></p>
+</div>
+
+<div class="modal" id="addModal">
+    <div class="modal-body">
+        <h3 style="margin-bottom:20px; color:var(--fb-blue);">Add New Coin to Vault</h3>
+        <div class="form-group">
+            <label>Coin Description:</label>
+            <input type="text" id="f-name" placeholder="e.g. 1881-S Morgan Dollar">
+        </div>
+        <div class="form-group">
+            <label>Year:</label>
+            <input type="text" id="f-year" placeholder="1881">
+        </div>
+        <div class="form-group">
+            <label>Cost Paid ($):</label>
+            <input type="number" step="0.01" id="f-cost" placeholder="0.00">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-p" style="flex:1" onclick="submitNewItem()">Save to Inventory</button>
+            <button class="btn" style="flex:1" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // CORE DATA
+    let db = JSON.parse(localStorage.getItem('ksn_enterprise_db')) || { inventory: [], sold: [] };
+    let scanQueue = [];
+
+    // --- SCANNER ENGINE (Captures barcode input globally) ---
+    let barcodeBuffer = "";
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            if (barcodeBuffer.length > 3) {
+                handleScan(barcodeBuffer);
+            }
+            barcodeBuffer = "";
+        } else {
+            barcodeBuffer += e.key;
+        }
+        // Reset buffer if typing is slow (prevents interference with normal typing)
+        setTimeout(() => { barcodeBuffer = ""; }, 200);
+    });
+
+    // Manual input support
+    document.getElementById('manual-scan').addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') {
+            handleScan(e.target.value);
+            e.target.value = '';
+        }
+    });
+
+    function handleScan(id) {
+        const item = db.inventory.find(i => i.id === id);
+        if (item) {
+            // Add to Bulk Queue
+            if (!scanQueue.find(q => q.id === id)) {
+                scanQueue.push({...item});
+                renderQueue();
+                notify(`Added ${item.name} to Batch`);
+            }
+        } else {
+            alert("Barcode not found in inventory!");
+        }
+    }
+
+    // --- INVENTORY LOGIC ---
+    function submitNewItem() {
+        const name = document.getElementById('f-name').value;
+        const cost = parseFloat(document.getElementById('f-cost').value) || 0;
+        const year = document.getElementById('f-year').value;
+
+        if (!name || cost <= 0) return alert("Please fill in Name and Cost.");
+
+        const newItem = {
+            id: 'KSN' + Math.floor(100000 + Math.random() * 900000),
+            name, year, cost,
+            addedDate: new Date().toLocaleDateString()
+        };
+
+        db.inventory.push(newItem);
+        saveAndRefresh();
+        closeModal();
+    }
+
+    // --- BATCH PROCESSING ---
+    function renderQueue() {
+        const container = document.getElementById('queue-container');
+        const btn = document.getElementById('batch-btn');
+        
+        if (scanQueue.length === 0) {
+            container.innerHTML = `<p style="color:#999; font-style:italic;">Scan items to add them here...</p>`;
+            btn.style.display = 'none';
+            return;
+        }
+
+        btn.style.display = 'block';
+        container.innerHTML = scanQueue.map((item, index) => `
+            <div class="queue-card">
+                <span class="remove-q" onclick="removeFromQueue(${index})">✕</span>
+                <strong>${item.name}</strong>
+                <div style="font-size:10px; color:#666; margin-top:2px;">Cost: $${item.cost.toFixed(2)}</div>
+                <input type="number" step="0.01" class="batch-price" data-index="${index}" placeholder="Sold Price ($)">
+            </div>
+        `).join('');
+        
+        // Auto-focus last input
+        const inputs = document.querySelectorAll('.batch-price');
+        inputs[inputs.length - 1].focus();
+    }
+
+    function processBatch() {
+        const priceInputs = document.querySelectorAll('.batch-price');
+        const buyer = prompt("Buyer Name for this batch?", "Retail Customer") || "Retail Customer";
+        
+        priceInputs.forEach(input => {
+            const idx = input.getAttribute('data-index');
+            const soldPrice = parseFloat(input.value);
+            if (soldPrice > 0) {
+                const item = scanQueue[idx];
+                item.soldPrice = soldPrice;
+                item.profit = soldPrice - item.cost;
+                item.buyer = buyer;
+                item.soldDate = new Date().toLocaleDateString();
+                
+                db.sold.push({...item});
+                db.inventory = db.inventory.filter(i => i.id !== item.id);
+            }
+        });
+
+        scanQueue = [];
+        saveAndRefresh();
+        alert("Batch Sales Processed Successfully!");
+    }
+
+    function removeFromQueue(idx) {
+        scanQueue.splice(idx, 1);
+        renderQueue();
+    }
+
+    // --- PRINTING UTILS ---
+    function printLabel(id, name) {
+        document.body.className = 'printing-label';
+        JsBarcode("#mini-barcode-svg", id, { 
+            format: "CODE128", width: 1.5, height: 40, displayValue: true, fontSize: 10 
+        });
+        document.getElementById('label-item-name').innerText = name;
+        window.print();
+        document.body.className = 'standard-view';
+    }
+
+    function triggerPrint(type) {
+        document.body.className = type === 'invoice' ? 'printing-invoice' : 'standard-view';
+        window.print();
+        document.body.className = 'standard-view';
+    }
+
+    function buildInvoice() {
+        const idx = document.getElementById('invoice-selector').value;
+        const item = db.sold[idx];
+        if (!item) return;
+
+        document.getElementById('inv-date-disp').innerText = item.soldDate;
+        document.getElementById('inv-num-disp').innerText = "KSN-" + (1000 + parseInt(idx));
+        document.getElementById('inv-buyer-disp').innerText = item.buyer;
+        document.getElementById('inv-items-list').innerHTML = `
+            <tr>
+                <td style="padding:15px;">${item.name} (${item.year})</td>
+                <td style="padding:15px; text-align:right;">$${item.soldPrice.toFixed(2)}</td>
+            </tr>
+        `;
+        document.getElementById('inv-total-disp').innerText = "$" + item.soldPrice.toFixed(2);
+    }
+
+    // --- UI ENGINE ---
+    function saveAndRefresh() {
+        localStorage.setItem('ksn_enterprise_db', JSON.stringify(db));
+        renderTables();
+    }
+
+    function renderTables() {
+        // Inventory
+        document.getElementById('inventory-list').innerHTML = db.inventory.map(i => `
+            <tr>
+                <td><svg id="sm-bc-${i.id}" style="height:25px"></svg></td>
+                <td><strong>${i.id}</strong></td>
+                <td>${i.name}</td><td>${i.year}</td>
+                <td>$${i.cost.toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="printLabel('${i.id}', '${i.name}')">🖨️ Label</button>
+                </td>
+            </tr>
+        `).join('');
+        db.inventory.forEach(i => JsBarcode(`#sm-bc-${i.id}`, i.id, {height: 20, width: 1, displayValue: false}));
+
+        // Sales
+        document.getElementById('sales-list').innerHTML = db.sold.map(s => `
+            <tr>
+                <td>${s.soldDate}</td><td>${s.name}</td>
+                <td>$${s.cost.toFixed(2)}</td><td>$${s.soldPrice.toFixed(2)}</td>
+                <td style="color:${s.profit >= 0 ? 'green' : 'red'}">$${s.profit.toFixed(2)}</td>
+                <td>${s.buyer}</td>
+            </tr>
+        `).join('');
+
+        // Invoice Dropdown
+        document.getElementById('invoice-selector').innerHTML = db.sold.map((s, idx) => `
+            <option value="${idx}">${s.soldDate} - ${s.name} (${s.buyer})</option>
+        `).join('');
+
+        renderQueue();
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        event.currentTarget.classList.add('active');
+        document.getElementById('view-title').innerText = event.currentTarget.innerText;
+    }
+
+    function openModal() { document.getElementById('addModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('addModal').style.display = 'none'; }
+    function notify(msg) { console.log(msg); } // Simple log for scan confirmation
+
+    // INITIALIZE
+    renderTables();
+</script>
+</body>
+</html>
